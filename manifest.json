@@ -1,0 +1,6 @@
+{
+    "name": "Offline Mesh",
+    "short_name": "Mesh",
+    "start_url": "/",
+    "display": "standalone"
+  }
