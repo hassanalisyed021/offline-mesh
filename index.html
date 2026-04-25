@@ -2,23 +2,16 @@
 <html>
 <head>
   <title>Offline Mesh</title>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-  <script src="https://unpkg.com/html5-qrcode"></script>
-  <style>
-    body { text-align:center; font-family:sans-serif; }
-    button { padding:10px; margin:10px; }
-    #qr { margin:20px; }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<h2>Offline Mesh</h2>
+<h1>Offline Mesh Network</h1>
 
 <button onclick="startServer()">Start Server</button>
 <button onclick="joinServer()">Join Server</button>
-
-<div id="status"></div>
-<div id="qr"></div>
+<button onclick="completeConnection()">Complete Connection</button>
+<div id="output"></div>
 
 <input type="file" id="fileInput" />
 
