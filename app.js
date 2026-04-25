@@ -1,54 +1,120 @@
-let pc;
+let pc = new RTCPeerConnection();
 let channel;
+let fileBuffer = [];
+let receivedSize = 0;
 
+const CHUNK_SIZE = 16000;
+
+function log(msg) {
+  document.getElementById("status").innerText = msg;
+}
+
+// ICE handling
+pc.onicecandidate = (event) => {
+  if (event.candidate === null) {
+    const data = JSON.stringify(pc.localDescription);
+    QRCode.toCanvas(document.getElementById("qr"), data);
+  }
+};
+
+// ------------------ START SERVER ------------------
 async function startServer() {
-  pc = new RTCPeerConnection();
-
   channel = pc.createDataChannel("data");
 
-  channel.onmessage = (e) => {
-    document.getElementById("output").innerText += "\n" + e.data;
-  };
+  setupChannel();
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  // Display offer (simulate QR)
-  document.getElementById("output").innerText =
-    "SHARE THIS CODE:\n" + JSON.stringify(offer);
+  log("Share QR with other device");
 }
 
-async function joinServer() {
-  const offer = prompt("Paste server code:");
+// ------------------ JOIN SERVER ------------------
+function joinServer() {
+  const scanner = new Html5QrcodeScanner("qr", { fps: 10 });
 
-  pc = new RTCPeerConnection();
+  scanner.render(async (text) => {
+    scanner.clear();
 
-  pc.ondatachannel = (event) => {
-    channel = event.channel;
+    const offer = JSON.parse(text);
 
-    channel.onmessage = (e) => {
-      document.getElementById("output").innerText += "\n" + e.data;
+    pc.ondatachannel = (event) => {
+      channel = event.channel;
+      setupChannel();
     };
+
+    await pc.setRemoteDescription(offer);
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    QRCode.toCanvas(document.getElementById("qr"),
+      JSON.stringify(pc.localDescription)
+    );
+
+    log("Show this QR back to server");
+  });
+}
+
+// ------------------ RECEIVE ANSWER ------------------
+async function receiveAnswer(text) {
+  const answer = JSON.parse(text);
+  await pc.setRemoteDescription(answer);
+}
+
+// ------------------ CHANNEL SETUP ------------------
+function setupChannel() {
+  channel.onopen = () => log("Connected ✅");
+
+  channel.onmessage = (e) => {
+    if (typeof e.data === "string") {
+      console.log("Text:", e.data);
+    } else {
+      fileBuffer.push(e.data);
+      receivedSize += e.data.byteLength;
+
+      if (receivedSize >= expectedFileSize) {
+        const blob = new Blob(fileBuffer);
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "received_file";
+        a.click();
+
+        fileBuffer = [];
+        receivedSize = 0;
+      }
+    }
+  };
+}
+
+// ------------------ FILE SEND ------------------
+document.getElementById("fileInput").addEventListener("change", () => {
+  const file = fileInput.files[0];
+  sendFile(file);
+});
+
+function sendFile(file) {
+  let offset = 0;
+
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    channel.send(e.target.result);
+    offset += e.target.result.byteLength;
+
+    if (offset < file.size) {
+      readSlice(offset);
+    } else {
+      log("File sent ✅");
+    }
   };
 
-  await pc.setRemoteDescription(JSON.parse(offer));
-
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-
-  alert("Send this back to server:\n" + JSON.stringify(answer));
-}
-document.getElementById("fileInput").addEventListener("change", function () {
-    const file = this.files[0];
-    const reader = new FileReader();
-  
-    reader.onload = () => {
-      channel.send(reader.result);
-    };
-  
-    reader.readAsArrayBuffer(file);
-  });
-
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js");
+  function readSlice(o) {
+    const slice = file.slice(o, o + CHUNK_SIZE);
+    reader.readAsArrayBuffer(slice);
   }
+
+  readSlice(0);
+}
